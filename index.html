@@ -506,6 +506,47 @@ function jsonpRequest(url, timeoutMs=15000){
   });
 }
 
+/** ส่งข้อมูลแบบ POST ข้ามโดเมนผ่านฟอร์มที่ซ่อนไว้ + iframe ที่ซ่อนไว้
+ *  แทนการใช้ fetch() ตรงๆ — เพราะ Apps Script /exec จะ redirect ไปอีก URL หนึ่งเสมอ
+ *  (script.googleusercontent.com/macros/echo) ซึ่งบางครั้ง fetch() แบบ no-cors
+ *  จัดการ redirect ข้ามโดเมนได้ไม่เสถียรในบางเบราว์เซอร์/เครือข่าย ทำให้บันทึกล้มเหลว
+ *  เป็นระยะๆ ส่วนฟอร์ม POST เป็นกลไกดั้งเดิมของเบราว์เซอร์ที่รองรับข้ามโดเมนมาตั้งแต่แรก
+ *  ไม่มีปัญหาเรื่อง CORS/redirect เลย (ข้อแลกเปลี่ยนคืออ่านผลตอบกลับจากเซิร์ฟเวอร์ไม่ได้
+ *  แต่เราไม่จำเป็นต้องอ่านอยู่แล้ว)
+ */
+function formPostNoResponse(url, payload, timeoutMs=8000){
+  return new Promise((resolve)=>{
+    const iframeName = '__post_iframe_' + Math.random().toString(36).slice(2) + Date.now();
+    const iframe = document.createElement('iframe');
+    iframe.name = iframeName;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    form.target = iframeName;
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+
+    // ฟอร์ม POST แบบนี้อ่านผลตอบกลับจริงจากเซิร์ฟเวอร์ไม่ได้ (ข้อจำกัดของเทคนิค)
+    // ถือว่าสำเร็จถ้าเบราว์เซอร์ยิงคำขอออกไปได้โดยไม่มี error ของตัวเองเกิดขึ้น
+    setTimeout(()=>{
+      form.remove();
+      iframe.remove();
+      resolve(true);
+    }, timeoutMs);
+  });
+}
+
 const Store = {
   async get(key){
     if(backendReady){
@@ -522,12 +563,7 @@ const Store = {
   async set(key, value){
     if(backendReady){
       try{
-        await fetch(APPS_SCRIPT_URL, {
-          method:'POST',
-          mode:'no-cors', // opaque response — we can't read it, but the write still goes through
-          headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // avoids a CORS preflight on Apps Script
-          body: JSON.stringify({ key, value })
-        });
+        await formPostNoResponse(APPS_SCRIPT_URL, { key, value });
         memoryStore.set(key, value);
         return true;
       }catch(e){
