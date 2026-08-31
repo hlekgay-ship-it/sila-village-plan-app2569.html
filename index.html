@@ -327,7 +327,16 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
   .panel{ padding:16px; }
   .bar-row .bar-label{ width:96px; font-size:11.5px; }
 }
-@media print{ .app{ display:none !important; } #printRoot{ display:block !important; position:static !important; width:auto !important; } }
+@media print{
+  .app{ display:none !important; }
+  #printRoot{ display:block !important; position:static !important; width:auto !important; }
+  @page{ size:A4; margin:14mm 12mm; }
+  #printRoot table{ page-break-inside:auto; }
+  #printRoot tr{ page-break-inside:avoid; page-break-after:auto; }
+  #printRoot thead{ display:table-header-group; }
+  #printRoot h1,#printRoot h2{ page-break-after:avoid; }
+  #printRoot .kv,#printRoot .sub{ page-break-inside:avoid; }
+}
 
 /* printable report (offscreen) */
 #printRoot{ display:none; background:#fff; padding:30px; font-family:'Sarabun',sans-serif; color:#222; }
@@ -566,6 +575,31 @@ const DEV_ISSUES = [
   'ประเด็นการพัฒนาที่ 3 การพัฒนาสิ่งแวดล้อมเมืองยั่งยืน สุขาภิบาลอาหาร และการสร้างเสริมสุขภาวะที่ดี',
   'ประเด็นการพัฒนาที่ 4 การส่งเสริมด้านการศึกษา ประเพณีวัฒนธรรมและกีฬาให้กับประชาชนทุกช่วงวัย ยกระดับการท่องเที่ยวเชิงวัฒนธรรม',
   'ประเด็นการพัฒนาที่ 5 การพัฒนาระบบการบริการและบริหารจัดการองค์กรให้เป็นหน่วยงานที่มีประสิทธิภาพ มีธรรมาภิบาล มีนวัตกรรม',
+];
+const PLANS = [
+  'แผนงานบริหารงานทั่วไป',
+  'แผนงานการรักษาความสงบภายใน',
+  'แผนงานการศึกษา',
+  'แผนงานสาธารณสุข',
+  'แผนงานสังคมสงเคราะห์',
+  'แผนงานเคหะและชุมชน',
+  'แผนงานสร้างความเข้มแข็งของชุมชน',
+  'แผนงานการศาสนา วัฒนธรรม และนันทนาการ',
+  'แผนงานอุตสาหกรรมและการโยธา',
+  'แผนงานการเกษตร',
+];
+const DEPARTMENTS = [
+  'สำนักปลัดเทศบาล',
+  'กองคลัง',
+  'กองช่าง',
+  'กองการศึกษา',
+  'กองสาธารณสุขและสิ่งแวดล้อม',
+  'กองสวัสดิการสังคม',
+  'กองยุทธศาสตร์และงบประมาณ',
+  'กองการเจ้าหน้าที่',
+  'หน่วยตรวจสอบภายใน',
+  'ศูนย์พัฒนาเด็กเล็กเทศบาลเมืองศิลา',
+  'โรงเรียนสาธิตเทศบาลเมืองศิลา',
 ];
 const STATUSES = [
   {v:'pending',t:'รอพิจารณา'},{v:'approved',t:'อนุมัติแล้ว'},{v:'doing',t:'กำลังดำเนินการ'},
@@ -949,12 +983,12 @@ function renderMaster(){
         <div class="field"><label>งบประมาณ (บาท)</label><input type="number" data-mpath="${idx}.budget" value="${escapeHtml(p.budget||'')}"/></div>
         <div class="field"><label>งบอนุมัติจริง (บาท)</label><input type="number" data-mpath="${idx}.actualBudget" value="${escapeHtml(p.actualBudget||'')}"/></div>
         <div class="field wide"><label>ประเด็นการพัฒนา</label><select data-mpath="${idx}.developmentIssue"><option value="">— เลือก —</option>${DEV_ISSUES.map(s=>`<option ${s===p.developmentIssue?'selected':''}>${s}</option>`).join('')}</select></div>
-        <div class="field wide"><label>กลยุทธ์/แนวทางการพัฒนา</label><input type="text" data-mpath="${idx}.strategyApproach" value="${escapeHtml(p.strategyApproach||'')}"/></div>
+        <div class="field wide"><label>แผนงาน</label><select data-mpath="${idx}.strategyApproach"><option value="">— เลือก —</option>${PLANS.map(s=>`<option ${s===p.strategyApproach?'selected':''}>${s}</option>`).join('')}</select></div>
         <div class="field"><label>สถานะ</label><select data-mpath="${idx}.status">${STATUSES.map(s=>`<option value="${s.v}" ${s.v===p.status?'selected':''}>${s.t}</option>`).join('')}</select></div>
         <div class="field"><label>ลำดับความสำคัญ</label><input type="number" data-mpath="${idx}.priority" value="${escapeHtml(p.priority||'')}"/></div>
-        <div class="field wide"><label>ตัวชี้วัด/ผลผลิต</label><input type="text" data-mpath="${idx}.kpi" value="${escapeHtml(p.kpi||'')}"/></div>
-        <div class="field wide"><label>ผลลัพธ์ที่คาดหวัง</label><input type="text" data-mpath="${idx}.outcome" value="${escapeHtml(p.outcome||'')}"/></div>
-        <div class="field"><label>หน่วยรับผิดชอบ</label><input type="text" data-mpath="${idx}.unit" value="${escapeHtml(p.unit||'')}"/></div>
+        <div class="field wide"><label>วัตถุประสงค์</label><input type="text" data-mpath="${idx}.kpi" value="${escapeHtml(p.kpi||'')}"/></div>
+        <div class="field wide"><label>ผลที่คาดว่าจะได้รับ</label><input type="text" data-mpath="${idx}.outcome" value="${escapeHtml(p.outcome||'')}"/></div>
+        <div class="field"><label>หน่วยรับผิดชอบ</label><select data-mpath="${idx}.unit"><option value="">— เลือก —</option>${DEPARTMENTS.map(s=>`<option ${s===p.unit?'selected':''}>${s}</option>`).join('')}</select></div>
         <div class="field wide"><label>ความเชื่อมโยงปัญหา</label><input type="text" data-mpath="${idx}.linkedProblem" value="${escapeHtml(p.linkedProblem||'')}"/></div>
         <div class="field wide"><label>หมายเหตุ</label><input type="text" data-mpath="${idx}.note" value="${escapeHtml(p.note||'')}"/></div>
         <div class="field wide">
@@ -1503,7 +1537,7 @@ document.getElementById('btnExcel').addEventListener('click', async ()=>{
       (v.reviews||[]).forEach(r=> reviewRows.push([no,name,r.date||'',r.round||'',r.resolution||'',r.attendees||'',r.note||'']));
     }
 
-    const masterHeader = ['หมู่ที่','หมู่บ้าน','ลำดับ','ชื่อโครงการ/กิจกรรม',...YEARS,'งบประมาณ (บาท)','ประเด็นการพัฒนา','กลยุทธ์/แนวทางการพัฒนา','ตัวชี้วัด/ผลผลิต','ผลลัพธ์ที่คาดหวัง','หน่วยรับผิดชอบ','ความเชื่อมโยงปัญหา','ลำดับความสำคัญ','สถานะ','งบอนุมัติจริง (บาท)','หมายเหตุ'];
+    const masterHeader = ['หมู่ที่','หมู่บ้าน','ลำดับ','ชื่อโครงการ/กิจกรรม',...YEARS,'งบประมาณ (บาท)','ประเด็นการพัฒนา','แผนงาน','วัตถุประสงค์','ผลที่คาดว่าจะได้รับ','หน่วยรับผิดชอบ','ความเชื่อมโยงปัญหา','ลำดับความสำคัญ','สถานะ','งบอนุมัติจริง (บาท)','หมายเหตุ'];
     const masterRows = [masterHeader];
     freshMaster.forEach(p=>{
       const statusTxt = (STATUSES.find(s=>s.v===p.status)||{}).t || '';
