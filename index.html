@@ -364,10 +364,10 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
   .panel{ padding:16px; }
   .bar-row .bar-label{ width:96px; font-size:11.5px; }
 }
-@media print{ .sidebar,.topbar,.status-strip{ display:none !important; } }
+@media print{ .app{ display:none !important; } #printRoot{ display:block !important; position:static !important; width:auto !important; } }
 
 /* printable report (offscreen) */
-#printRoot{ position:fixed; left:-9999px; top:0; width:760px; background:#fff; padding:30px; font-family:'Sarabun',sans-serif; color:#222; }
+#printRoot{ display:none; background:#fff; padding:30px; font-family:'Sarabun',sans-serif; color:#222; }
 #printRoot h1{ font-family:'Kanit',sans-serif; font-size:20px; margin:0 0 2px; }
 #printRoot h2{ font-family:'Kanit',sans-serif; font-size:15px; margin:22px 0 8px; border-bottom:2px solid #C08444; padding-bottom:4px;}
 #printRoot .sub{ color:#666; font-size:12px; margin-bottom:14px;}
@@ -458,19 +458,59 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
    and writes the SAME central data. See "คู่มือติดตั้ง" (setup
    guide) for how to get this URL — paste it below between the
    quotes before publishing this file to your team.
+
+   NOTE: Apps Script Web Apps don't reliably send CORS headers,
+   so a plain cross-origin fetch() often gets silently blocked
+   by the browser once this file is hosted on its own domain
+   (e.g. GitHub Pages). To work around this:
+   - reads (GET) go through JSONP (a <script> tag), which is not
+     subject to CORS at all
+   - writes (POST) use fetch with mode:'no-cors' — the request
+     still reaches the server even though the browser won't let
+     us read the response back
 ============================================================ */
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwl69QvkSHnbu3TQdWBB9umGDA_pwl-FiKgAxENUDlpwZp-jzFbOQoXumnlwJDxIv4Kgg/exec";
 
 const backendReady = APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf('https://script.google.com') === 0;
 const memoryStore = new Map(); // used only as an offline fallback
 
+function jsonpRequest(url, timeoutMs=15000){
+  return new Promise((resolve, reject)=>{
+    const cbName = '__jsonp_cb_' + Math.random().toString(36).slice(2) + Date.now();
+    const script = document.createElement('script');
+    let settled = false;
+
+    function cleanup(){
+      delete window[cbName];
+      script.remove();
+    }
+    window[cbName] = (data)=>{
+      settled = true;
+      cleanup();
+      resolve(data);
+    };
+    script.onerror = ()=>{
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('JSONP request failed to load'));
+    };
+    script.src = url + (url.indexOf('?')>-1 ? '&' : '?') + 'callback=' + cbName;
+    document.body.appendChild(script);
+    setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('JSONP request timed out'));
+    }, timeoutMs);
+  });
+}
+
 const Store = {
   async get(key){
     if(backendReady){
       try{
-        const res = await fetch(`${APPS_SCRIPT_URL}?key=${encodeURIComponent(key)}`);
-        if(!res.ok) throw new Error('bad status');
-        const json = await res.json();
+        const json = await jsonpRequest(`${APPS_SCRIPT_URL}?key=${encodeURIComponent(key)}`);
         return json.value===undefined ? null : json.value;
       }catch(e){
         console.error('Store.get failed, using local fallback', e);
@@ -482,12 +522,12 @@ const Store = {
   async set(key, value){
     if(backendReady){
       try{
-        const res = await fetch(APPS_SCRIPT_URL, {
+        await fetch(APPS_SCRIPT_URL, {
           method:'POST',
-          headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+          mode:'no-cors', // opaque response — we can't read it, but the write still goes through
+          headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // avoids a CORS preflight on Apps Script
           body: JSON.stringify({ key, value })
         });
-        if(!res.ok) throw new Error('bad status');
         memoryStore.set(key, value);
         return true;
       }catch(e){
@@ -504,8 +544,8 @@ const Store = {
 async function pingBackend(){
   if(!backendReady) return false;
   try{
-    const res = await fetch(`${APPS_SCRIPT_URL}?key=__ping__`);
-    return res.ok;
+    const json = await jsonpRequest(`${APPS_SCRIPT_URL}?key=__ping__`);
+    return !!(json && json.ok);
   }catch(e){ return false; }
 }
 
@@ -1525,8 +1565,7 @@ document.getElementById('btnExcel').addEventListener('click', async ()=>{
 /* ============================================================
    EXPORT — PDF (context aware: village report or master/summary)
 ============================================================ */
-document.getElementById('btnPdf').addEventListener('click', async ()=>{
-  showExportSaving('กำลังสร้างไฟล์ PDF...');
+document.getElementById('btnPdf').addEventListener('click', ()=>{
   try{
     const root = document.getElementById('printRoot');
     if(SECTION_META[state.currentSection].villageScoped){
@@ -1536,21 +1575,11 @@ document.getElementById('btnPdf').addEventListener('click', async ()=>{
     } else {
       root.innerHTML = buildSummaryReportHtml();
     }
-    const pdf = new jspdf.jsPDF('p','pt','a4');
-    await pdf.html(root, {
-      x:24, y:24, width:545, windowWidth:800,
-      callback: (doc)=>{
-        const fname = SECTION_META[state.currentSection].villageScoped
-          ? `แผนพัฒนาหมู่บ้าน_หมู่${state.currentVillage}.pdf`
-          : (state.currentSection==='master' ? 'โครงการขอบรรจุแผนพัฒนาท้องถิ่น_71-75.pdf' : 'สรุปโครงการตามประเด็นการพัฒนา_71-75.pdf');
-        doc.save(fname);
-        hideExportSaving();
-        Swal.fire({icon:'success', title:'ดาวน์โหลดสำเร็จ', text:'ไฟล์ PDF ถูกบันทึกลงเครื่องแล้ว', timer:1800, showConfirmButton:false});
-      }
-    });
+    // ใช้ระบบพิมพ์ในตัวเบราว์เซอร์ — เชื่อถือได้กว่าการแปลงเป็นภาพมาก
+    // ในหน้าต่างพิมพ์ที่เปิดขึ้น ให้เลือกปลายทางเป็น "บันทึกเป็น PDF" (Save as PDF)
+    window.print();
   } catch(err){
-    hideExportSaving();
-    Swal.fire({icon:'error', title:'เกิดข้อผิดพลาด', text:'ไม่สามารถสร้างไฟล์ PDF ได้ กรุณาลองใหม่'});
+    Swal.fire({icon:'error', title:'เกิดข้อผิดพลาด', text:'ไม่สามารถเตรียมรายงานสำหรับพิมพ์ได้ กรุณาลองใหม่'});
     console.error(err);
   }
 });
