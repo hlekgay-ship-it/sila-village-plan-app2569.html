@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="th" data-theme="royal">
+<html lang="th">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,47 +16,22 @@
 
 <style>
 :root{
-  --stone-bg:#EAEBE3;
-  --stone-bg-deep:#DEE0D5;
+  --stone-bg:#EDF1E6;
+  --stone-bg-deep:#DEE7D3;
   --surface:#FFFFFF;
-  --ink:#26313A;
-  --ink-soft:#5B6670;
-  --slate:#33414D;
-  --slate-dark:#222C34;
-  --ochre:#C08444;
-  --ochre-soft:#EADFCB;
-  --moss:#5B8266;
-  --rust:#B5533C;
-  --line:#DCDCD2;
-  --line-strong:#C7C9BC;
+  --ink:#25311F;
+  --ink-soft:#5C6B54;
+  --slate:#3C5A34;
+  --slate-dark:#28401F;
+  --ochre:#C99A3E;
+  --ochre-soft:#F1E3C4;
+  --moss:#5B8F4F;
+  --rust:#B15332;
+  --line:#DCE4D3;
+  --line-strong:#C5D1B8;
   --radius:14px;
   --shadow-1:0 1px 2px rgba(38,49,58,.06), 0 2px 8px rgba(38,49,58,.06);
   --shadow-2:0 4px 16px rgba(38,49,58,.10), 0 1px 3px rgba(38,49,58,.08);
-}
-/* ---------- Theme palettes ---------- */
-html[data-theme="ocean"]{
-  --stone-bg:#E8EEF1; --stone-bg-deep:#D7E3E8; --surface:#FFFFFF;
-  --ink:#1E2E36; --ink-soft:#57707C; --slate:#1F5B72; --slate-dark:#153F50;
-  --ochre:#2FA0B8; --ochre-soft:#D8EFF3; --moss:#3E7D6B; --rust:#C2543F;
-  --line:#D7E1E4; --line-strong:#BFD0D5;
-}
-html[data-theme="forest"]{
-  --stone-bg:#EDF1E6; --stone-bg-deep:#DEE7D3; --surface:#FFFFFF;
-  --ink:#25311F; --ink-soft:#5C6B54; --slate:#3C5A34; --slate-dark:#28401F;
-  --ochre:#C99A3E; --ochre-soft:#F1E3C4; --moss:#5B8F4F; --rust:#B15332;
-  --line:#DCE4D3; --line-strong:#C5D1B8;
-}
-html[data-theme="sunset"]{
-  --stone-bg:#F5ECE6; --stone-bg-deep:#EBDACE; --surface:#FFFFFF;
-  --ink:#3A2A26; --ink-soft:#7A5F55; --slate:#8C3F4D; --slate-dark:#642B36;
-  --ochre:#E08A3C; --ochre-soft:#FBE3C8; --moss:#7A6A9B; --rust:#C0473B;
-  --line:#EAD9CE; --line-strong:#DDC2B2;
-}
-html[data-theme="royal"]{
-  --stone-bg:#EDEAF3; --stone-bg-deep:#DFDAEC; --surface:#FFFFFF;
-  --ink:#2A2438; --ink-soft:#615A76; --slate:#4A3A73; --slate-dark:#332552;
-  --ochre:#C79A3E; --ochre-soft:#F1E3C0; --moss:#5E7C63; --rust:#B5533C;
-  --line:#E1DCEC; --line-strong:#CBC1DE;
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
@@ -102,18 +77,6 @@ h1,h2,h3,h4,.brand,.nav-item,.btn,.section-title{font-family:'Kanit',sans-serif;
 }
 .brand h1{font-size:17.5px; font-weight:600; margin:0; line-height:1.35; letter-spacing:.2px;}
 
-.theme-switcher{
-  padding:14px 18px; border-bottom:1px solid rgba(255,255,255,.12);
-}
-.theme-switcher .fg-label{ font-size:11.5px; color:#AEB6B0; margin-bottom:9px; letter-spacing:.4px; }
-.theme-swatches{ display:flex; gap:9px; }
-.theme-swatch{
-  width:26px; height:26px; border-radius:50%; cursor:pointer; border:2px solid transparent;
-  box-shadow:0 0 0 1px rgba(255,255,255,.18) inset; transition:transform .15s, border-color .15s;
-  flex-shrink:0;
-}
-.theme-swatch:hover{ transform:scale(1.1); }
-.theme-swatch.active{ border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.35); }
 
 .village-picker{
   padding:16px 18px; border-bottom:1px solid rgba(255,255,255,.12);
@@ -389,17 +352,6 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
       <h1>แผนพัฒนาหมู่บ้าน</h1>
     </div>
 
-    <div class="theme-switcher">
-      <div class="fg-label">ธีมสี</div>
-      <div class="theme-swatches" id="themeSwatches">
-        <div class="theme-swatch" data-theme="stone" title="หินศิลา" style="background:linear-gradient(135deg,#33414D,#C08444)"></div>
-        <div class="theme-swatch" data-theme="ocean" title="ทะเล" style="background:linear-gradient(135deg,#1F5B72,#2FA0B8)"></div>
-        <div class="theme-swatch" data-theme="forest" title="ป่าไม้" style="background:linear-gradient(135deg,#3C5A34,#C99A3E)"></div>
-        <div class="theme-swatch" data-theme="sunset" title="ตะวันลับฟ้า" style="background:linear-gradient(135deg,#8C3F4D,#E08A3C)"></div>
-        <div class="theme-swatch active" data-theme="royal" title="ราชวัง" style="background:linear-gradient(135deg,#4A3A73,#C79A3E)"></div>
-      </div>
-    </div>
-
     <div class="village-picker" id="villagePickerWrap">
       <label>เลือกหมู่บ้าน (สำหรับข้อมูลรายหมู่บ้าน)</label>
       <select id="villageSelect"></select>
@@ -434,6 +386,7 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
       </div>
       <div class="topbar-actions">
         <button class="btn btn-ghost btn-sm" id="btnRefresh" title="ดึงข้อมูลล่าสุดจากส่วนกลาง">🔄 ซิงค์</button>
+        <button class="btn btn-ghost btn-sm" id="btnPrint" title="พิมพ์รายงานหน้านี้">🖨️ พิมพ์</button>
         <button class="btn btn-ghost btn-sm" id="btnPdf">📄 PDF</button>
         <button class="btn btn-ochre btn-sm" id="btnExcel">📊 Excel/CSV</button>
       </div>
@@ -1390,13 +1343,6 @@ villageSelect.addEventListener('change', async ()=>{
   renderContent();
 });
 
-document.querySelectorAll('.theme-swatch').forEach(sw=>{
-  sw.addEventListener('click', ()=>{
-    document.documentElement.setAttribute('data-theme', sw.dataset.theme);
-    document.querySelectorAll('.theme-swatch').forEach(s=>s.classList.toggle('active', s===sw));
-  });
-});
-
 document.getElementById('hamburger').addEventListener('click', ()=>{
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('overlay').classList.add('show');
@@ -1601,7 +1547,7 @@ document.getElementById('btnExcel').addEventListener('click', async ()=>{
 /* ============================================================
    EXPORT — PDF (context aware: village report or master/summary)
 ============================================================ */
-document.getElementById('btnPdf').addEventListener('click', ()=>{
+function printCurrentReport(){
   try{
     const root = document.getElementById('printRoot');
     if(SECTION_META[state.currentSection].villageScoped){
@@ -1612,13 +1558,15 @@ document.getElementById('btnPdf').addEventListener('click', ()=>{
       root.innerHTML = buildSummaryReportHtml();
     }
     // ใช้ระบบพิมพ์ในตัวเบราว์เซอร์ — เชื่อถือได้กว่าการแปลงเป็นภาพมาก
-    // ในหน้าต่างพิมพ์ที่เปิดขึ้น ให้เลือกปลายทางเป็น "บันทึกเป็น PDF" (Save as PDF)
+    // ในหน้าต่างพิมพ์ที่เปิดขึ้น เลือกปลายทางเป็นเครื่องพิมพ์ หรือ "บันทึกเป็น PDF" (Save as PDF)
     window.print();
   } catch(err){
     Swal.fire({icon:'error', title:'เกิดข้อผิดพลาด', text:'ไม่สามารถเตรียมรายงานสำหรับพิมพ์ได้ กรุณาลองใหม่'});
     console.error(err);
   }
-});
+}
+document.getElementById('btnPdf').addEventListener('click', printCurrentReport);
+document.getElementById('btnPrint').addEventListener('click', printCurrentReport);
 
 function buildVillageReportHtml(no){
   const v = state.villages[no];
