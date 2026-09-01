@@ -122,6 +122,24 @@ nav.menu{ flex:1; overflow-y:auto; padding:10px 10px 16px; }
 .storage-pill .dot{width:6px;height:6px;border-radius:50%; background:var(--moss);}
 .storage-pill.offline .dot{ background:var(--rust); }
 
+.edit-mode-link{
+  display:block; width:100%; margin-top:10px; padding:7px 9px; border-radius:8px;
+  border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); color:#C7CFC9;
+  font-family:'Sarabun',sans-serif; font-size:11.5px; cursor:pointer; text-align:left;
+}
+.edit-mode-link:hover{ background:rgba(255,255,255,.1); color:#fff; }
+
+.ro-banner{
+  display:none; align-items:center; gap:8px;
+  padding:9px 26px; background:var(--ochre-soft); color:#6B4A18; font-size:13px; font-weight:500;
+  border-bottom:1px solid var(--line-strong);
+}
+body.read-only-mode .content input:disabled,
+body.read-only-mode .content select:disabled,
+body.read-only-mode .content textarea:disabled{
+  background:#F2F3EE; color:var(--ink-soft); cursor:not-allowed; opacity:1;
+}
+
 .main{ flex:1; min-width:0; display:flex; flex-direction:column; max-height:100vh; overflow-y:auto; }
 
 .topbar{
@@ -383,6 +401,8 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
     <div class="sidebar-foot">
       บันทึกข้อมูลอัตโนมัติของแต่ละหมู่บ้าน
       <div class="storage-pill" id="storagePill"><span class="dot"></span><span id="storagePillText">ตรวจสอบระบบจัดเก็บ...</span></div>
+      <button class="edit-mode-link" id="btnEnterEdit">🔒 เจ้าหน้าที่ · เข้าสู่โหมดแก้ไข</button>
+      <button class="edit-mode-link" id="btnExitEdit" style="display:none;">🔓 ออกจากโหมดแก้ไข (กลับเป็นดูอย่างเดียว)</button>
     </div>
   </aside>
 
@@ -400,6 +420,7 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
         <button class="btn btn-ochre btn-sm" id="btnExcel">📊 Excel/CSV</button>
       </div>
     </div>
+    <div class="ro-banner" id="roBanner">👁️ กำลังแสดงข้อมูลในโหมด "ดูอย่างเดียว" สำหรับประชาชน — ดูและดาวน์โหลดรายงานได้ แต่แก้ไขข้อมูลไม่ได้</div>
     <div class="status-strip" id="statusStrip"><span class="spinner"></span><span id="statusText">กำลังบันทึกข้อมูล...</span></div>
 
     <div class="content" id="content"></div>
@@ -414,6 +435,92 @@ table.data-table tr:last-child td{ border-bottom:none; font-weight:600; backgrou
 <div id="printRoot"></div>
 
 <script>
+/* ============================================================
+   ACCESS MODE — everyone is READ-ONLY by default (safe for
+   the public link). Staff switch to edit mode with a shared
+   edit key; the SAME key is sent along with every write so the
+   Apps Script backend can also reject writes that don't include
+   it — see "คู่มือติดตั้ง Apps Script" (setup notes) below for the
+   matching backend code to paste in.
+
+   IMPORTANT / ข้อจำกัดที่ควรรู้: EDIT_KEY อยู่ในซอร์สโค้ดของหน้านี้
+   ซึ่งใครก็เปิดดูได้ผ่าน "View Page Source" ดังนั้นมันช่วยกันคน
+   ทั่วไปกดแก้ไขข้อมูลโดยไม่ได้ตั้งใจ หรือกันมือใหม่คัดลอกลิงก์ไปแก้
+   ได้ในระดับหนึ่งเท่านั้น — ไม่ใช่การป้องกันที่แน่นหนาต่อผู้ที่ตั้งใจ
+   เปิดดูโค้ดจริงจัง การป้องกันที่แน่นหนากว่านี้ต้องตรวจสอบตัวตนที่
+   ฝั่ง Apps Script (เช่น จำกัดด้วยบัญชี Google ของเทศบาลเท่านั้น)
+   ซึ่งเป็นงานอีกขั้นที่ใหญ่กว่านี้
+============================================================ */
+const EDIT_KEY = "sila2569-แก้ไข"; // TODO: เปลี่ยนรหัสนี้ แล้วตั้งค่าเดียวกันในฝั่ง Apps Script (ดูคู่มือด้านล่าง)
+const EDIT_MODE_SESSION_KEY = 'sila_edit_mode_v1';
+const EDITOR_NAME_SESSION_KEY = 'sila_editor_name_v1';
+
+const accessState = {
+  readOnly: sessionStorage.getItem(EDIT_MODE_SESSION_KEY) !== '1',
+  editorName: sessionStorage.getItem(EDITOR_NAME_SESSION_KEY) || ''
+};
+function isReadOnly(){ return accessState.readOnly; }
+
+async function promptEnterEditMode(){
+  const {value: formValues} = await Swal.fire({
+    title:'เข้าสู่โหมดแก้ไข (สำหรับเจ้าหน้าที่)',
+    html:
+      '<input id="swal-editkey" type="password" class="swal2-input" placeholder="รหัสแก้ไขข้อมูล" autocomplete="off">' +
+      '<input id="swal-editor" type="text" class="swal2-input" placeholder="ชื่อ-สกุล หรือตำแหน่ง (บันทึกลงประวัติการแก้ไข)" autocomplete="off">',
+    focusConfirm:false,
+    showCancelButton:true,
+    confirmButtonText:'ยืนยัน',
+    cancelButtonText:'ยกเลิก',
+    confirmButtonColor:'#33414D',
+    preConfirm:()=>{
+      const key = document.getElementById('swal-editkey').value;
+      const editor = document.getElementById('swal-editor').value.trim();
+      if(!editor){
+        Swal.showValidationMessage('กรุณากรอกชื่อผู้แก้ไข เพื่อบันทึกลงประวัติการแก้ไขข้อมูล');
+        return false;
+      }
+      return {key, editor};
+    }
+  });
+  if(!formValues) return; // ยกเลิก
+  if(formValues.key === EDIT_KEY){
+    accessState.readOnly = false;
+    accessState.editorName = formValues.editor;
+    sessionStorage.setItem(EDIT_MODE_SESSION_KEY, '1');
+    sessionStorage.setItem(EDITOR_NAME_SESSION_KEY, formValues.editor);
+    applyAccessMode();
+    Swal.fire({icon:'success', title:'เข้าสู่โหมดแก้ไขแล้ว', text:'บันทึกการแก้ไขในนาม: '+formValues.editor, timer:1600, showConfirmButton:false});
+  } else {
+    Swal.fire({icon:'error', title:'รหัสไม่ถูกต้อง'});
+  }
+}
+function exitEditMode(){
+  accessState.readOnly = true;
+  accessState.editorName = '';
+  sessionStorage.removeItem(EDIT_MODE_SESSION_KEY);
+  sessionStorage.removeItem(EDITOR_NAME_SESSION_KEY);
+  applyAccessMode();
+}
+function applyAccessMode(){
+  const ro = isReadOnly();
+  document.body.classList.toggle('read-only-mode', ro);
+
+  const bar = document.getElementById('roBanner');
+  if(bar) bar.style.display = ro ? 'flex' : 'none';
+
+  const editBtn = document.getElementById('btnEnterEdit');
+  const exitBtn = document.getElementById('btnExitEdit');
+  if(editBtn) editBtn.style.display = ro ? '' : 'none';
+  if(exitBtn) exitBtn.style.display = ro ? 'none' : '';
+
+  const saveBtn = document.getElementById('btnSave');
+  if(saveBtn) saveBtn.style.display = ro ? 'none' : '';
+
+  // ปิดการแก้ไขทุกช่องกรอก/ปุ่มเพิ่ม-ลบ ที่ถูก render ไว้ในเนื้อหาปัจจุบัน (ถ้ามี)
+  document.querySelectorAll('#content [data-path], #content [data-mpath]').forEach(inp=>{ inp.disabled = ro; });
+  document.querySelectorAll('#content [data-action="add-row"], #content [data-action="delete-row"], #content [data-action="add-master"], #content [data-action="delete-master"]').forEach(btn=>{ btn.style.display = ro ? 'none' : ''; });
+}
+
 /* ============================================================
    STORAGE LAYER — connects to a Google Sheet through a Google
    Apps Script Web App, so every person filling the form reads
@@ -523,19 +630,23 @@ const Store = {
     return memoryStore.has(key) ? memoryStore.get(key) : null;
   },
   async set(key, value){
-    if(backendReady){
-      try{
-        await formPostNoResponse(APPS_SCRIPT_URL, { key, value });
-        memoryStore.set(key, value);
-        return true;
-      }catch(e){
-        console.error('Store.set failed, kept in local memory only', e);
-        memoryStore.set(key, value);
-        return false;
-      }
+    if(isReadOnly()){
+      console.warn('Store.set blocked: หน้านี้อยู่ในโหมดดูอย่างเดียว');
+      return false;
     }
     memoryStore.set(key, value);
-    return true;
+    if(!backendReady) return true;
+    try{
+      await formPostNoResponse(APPS_SCRIPT_URL, { key, value, editKey: EDIT_KEY, editedBy: accessState.editorName || '' });
+      // formPostNoResponse ยิงคำขอออกไปเฉยๆ อ่านผลตอบกลับจริงจากเซิร์ฟเวอร์ไม่ได้
+      // (ดูคอมเมนต์ด้านบน) จึงอ่านค่ากลับมาเทียบอีกครั้งเพื่อยืนยันว่าบันทึกสำเร็จจริง
+      // แทนที่จะถือว่า "สำเร็จ" แค่เพราะบราวเซอร์ยิงคำขอออกไปได้โดยไม่มี error ของตัวเอง
+      const verify = await jsonpRequest(`${APPS_SCRIPT_URL}?key=${encodeURIComponent(key)}`);
+      return !!(verify && verify.value === value);
+    }catch(e){
+      console.error('Store.set: ยืนยันผลการบันทึกไม่ได้', e);
+      return false;
+    }
   }
 };
 
@@ -1122,6 +1233,7 @@ function renderContent(){
 
   el.innerHTML = html;
   bindContentEvents();
+  applyAccessMode();
 
   document.getElementById('pageTitle').textContent = SECTION_META[s].title;
   document.getElementById('crumb').textContent = SECTION_META[s].crumb + (SECTION_META[s].villageScoped ? ` · หมู่ ${state.currentVillage} ${getVillageName(state.currentVillage)||''}` : '');
@@ -1158,18 +1270,65 @@ function markSaved(){
   if(stampEl) stampEl.textContent = 'บันทึกล่าสุด ' + new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
 }
 
+const villageVersions = {}; // no -> ตัวเลขเวอร์ชันล่าสุดที่เรารู้ ใช้เช็คว่ามีคนอื่นบันทึกทับไปหรือยัง
+
+async function confirmOverwriteConflict(latest){
+  const who = latest._savedBy || 'ไม่ทราบชื่อ';
+  const when = latest._savedAt || '-';
+  const r = await Swal.fire({
+    icon:'warning',
+    title:'มีคนอื่นแก้ไขข้อมูลหมู่บ้านนี้ไปแล้ว',
+    html:`ข้อมูลถูกบันทึกล่าสุดโดย <b>${escapeHtml(who)}</b><br>เมื่อ ${escapeHtml(when)}<br><br>ถ้าบันทึกทับตอนนี้ การแก้ไขบางส่วนของคนนั้นอาจหายไป`,
+    showDenyButton:true, showCancelButton:true,
+    confirmButtonText:'บันทึกทับข้อมูล (เสี่ยงข้อมูลหาย)',
+    denyButtonText:'ซิงค์ข้อมูลล่าสุดก่อน (ไม่บันทึกตอนนี้)',
+    cancelButtonText:'ยกเลิก',
+    confirmButtonColor:'#B15332', denyButtonColor:'#3C5A34', cancelButtonColor:'#8A9088'
+  });
+  if(r.isConfirmed) return true; // เลือกบันทึกทับ
+  if(r.isDenied){
+    await ensureVillageLoaded(state.currentVillage, {force:true});
+    renderContent();
+  }
+  return false;
+}
+
 async function performSaveVillage(){
+  const no = state.currentVillage;
   const stamp = new Date().toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'});
   currentVillageData().basic.lastUpdated = stamp;
   const stampField = document.querySelector('[data-path="basic.lastUpdated"]');
   if(stampField) stampField.value = stamp;
-  const ok = await Store.set('village:'+state.currentVillage, JSON.stringify(currentVillageData()));
-  if(ok) markSaved();
+
+  // เช็คก่อนบันทึกว่ามีคนอื่นบันทึกทับไปหลังจากที่เราโหลดข้อมูลชุดนี้มาหรือยัง
+  if(backendReady){
+    try{
+      const rawLatest = await Store.get('village:'+no);
+      if(rawLatest){
+        const latest = JSON.parse(rawLatest);
+        const serverVersion = latest._v || 0;
+        const myVersion = villageVersions[no] || 0;
+        if(serverVersion > myVersion){
+          const proceed = await confirmOverwriteConflict(latest);
+          if(!proceed) return false;
+        }
+      }
+    }catch(e){ console.error('ตรวจสอบ conflict ไม่สำเร็จ, จะบันทึกตามปกติ', e); }
+  }
+
+  const newVersion = (villageVersions[no] || 0) + 1;
+  currentVillageData()._v = newVersion;
+  currentVillageData()._savedBy = accessState.editorName || '';
+  currentVillageData()._savedAt = stamp;
+
+  const ok = await Store.set('village:'+no, JSON.stringify(currentVillageData()));
+  if(ok){ markSaved(); villageVersions[no] = newVersion; }
   return ok;
 }
 
 let saveTimer = null;
 function scheduleSaveVillage(){
+  if(isReadOnly()) return;
   setDirty(true);
   showSaving('กำลังบันทึกข้อมูลหมู่บ้าน...');
   clearTimeout(saveTimer);
@@ -1188,20 +1347,67 @@ let masterSaveTimer = null;
 const dirtyMasterVillages = new Set();
 function markMasterDirty(no){ if(no) dirtyMasterVillages.add(Number(no)); }
 
+// เหมือน villageVersions แต่แยกเวอร์ชันเป็นรายหมู่บ้าน เพราะโครงการแต่ละหมู่
+// เก็บเป็นก้อน (bucket) แยกกันคนละ key
+const masterVersions = {}; // no -> ตัวเลขเวอร์ชันล่าสุดที่เรารู้ ของหมู่นั้นๆ
+
+async function confirmOverwriteConflictMaster(no, latest){
+  const who = latest._savedBy || 'ไม่ทราบชื่อ';
+  const when = latest._savedAt || '-';
+  const r = await Swal.fire({
+    icon:'warning',
+    title:`มีคนอื่นแก้ไขโครงการของหมู่ ${no} ไปแล้ว`,
+    html:`บันทึกล่าสุดโดย <b>${escapeHtml(who)}</b><br>เมื่อ ${escapeHtml(when)}<br><br>ถ้าบันทึกทับตอนนี้ การแก้ไขบางส่วนของคนนั้นอาจหายไป`,
+    showDenyButton:true, showCancelButton:true,
+    confirmButtonText:'บันทึกทับข้อมูล (เสี่ยงข้อมูลหาย)',
+    denyButtonText:'ซิงค์ข้อมูลล่าสุดก่อน (ไม่บันทึกตอนนี้)',
+    cancelButtonText:'ยกเลิก',
+    confirmButtonColor:'#B15332', denyButtonColor:'#3C5A34', cancelButtonColor:'#8A9088'
+  });
+  if(r.isConfirmed) return true; // เลือกบันทึกทับ
+  if(r.isDenied){
+    await loadMasterProjects();
+    renderContent();
+  }
+  return false;
+}
+
 async function performSaveMaster(){
   const nos = Array.from(dirtyMasterVillages);
   dirtyMasterVillages.clear();
+  const stamp = new Date().toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'});
   let allOk = true;
   for(const no of nos){
-    const list = state.masterProjects.filter(p=>Number(p.villageNo)===no);
-    const ok = await Store.set('master-projects:'+no, JSON.stringify(list));
-    if(!ok) allOk = false;
+    const key = 'master-projects:'+no;
+
+    // เช็คก่อนบันทึกว่ามีคนอื่นบันทึกทับโครงการของหมู่นี้ไปหลังจากที่เราโหลดมาหรือยัง
+    if(backendReady){
+      try{
+        const rawLatest = await Store.get(key);
+        if(rawLatest){
+          const latest = JSON.parse(rawLatest);
+          const serverVersion = (Array.isArray(latest) ? 0 : (latest._v || 0));
+          const myVersion = masterVersions[no] || 0;
+          if(serverVersion > myVersion){
+            const proceed = await confirmOverwriteConflictMaster(no, latest);
+            if(!proceed){ allOk = false; continue; }
+          }
+        }
+      }catch(e){ console.error('ตรวจสอบ conflict โครงการของหมู่ '+no+' ไม่สำเร็จ, จะบันทึกตามปกติ', e); }
+    }
+
+    const items = state.masterProjects.filter(p=>Number(p.villageNo)===no);
+    const newVersion = (masterVersions[no] || 0) + 1;
+    const payload = { items, _v:newVersion, _savedBy:accessState.editorName||'', _savedAt:stamp };
+    const ok = await Store.set(key, JSON.stringify(payload));
+    if(ok) masterVersions[no] = newVersion; else allOk = false;
   }
   if(allOk) markSaved();
   return allOk;
 }
 
 function scheduleSaveMaster(dirtyNos){
+  if(isReadOnly()) return;
   (dirtyNos||[]).forEach(markMasterDirty);
   setDirty(true);
   showSaving('กำลังบันทึกโครงการ...');
@@ -1214,6 +1420,7 @@ function scheduleSaveMaster(dirtyNos){
 }
 
 document.getElementById('btnSave').addEventListener('click', async ()=>{
+  if(isReadOnly()) return;
   showSaving('กำลังบันทึก...');
   let ok;
   if(SECTION_META[state.currentSection].villageScoped){
@@ -1253,6 +1460,7 @@ function bindContentEvents(){
   el.querySelectorAll('[data-path]').forEach(input=>{
     const evt = (input.tagName==='SELECT') ? 'change' : 'input';
     input.addEventListener(evt, ()=>{
+      if(isReadOnly()) return;
       const path = input.getAttribute('data-path');
       const val = input.type==='checkbox' ? input.checked : input.value;
       if(path.startsWith('__vision__.')){
@@ -1275,6 +1483,7 @@ function bindContentEvents(){
   el.querySelectorAll('[data-mpath]').forEach(input=>{
     const evt = (input.tagName==='SELECT') ? 'change' : 'input';
     input.addEventListener(evt, ()=>{
+      if(isReadOnly()) return;
       const path = input.getAttribute('data-mpath');
       const val = input.type==='checkbox' ? input.checked : input.value;
       const idx = Number(path.split('.')[0]);
@@ -1289,6 +1498,7 @@ function bindContentEvents(){
 
   el.querySelectorAll('[data-action="add-row"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
+      if(isReadOnly()) return;
       const key = btn.getAttribute('data-key');
       getArrayRef(key).push({});
       scheduleSaveVillage();
@@ -1298,6 +1508,7 @@ function bindContentEvents(){
 
   el.querySelectorAll('[data-action="delete-row"]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      if(isReadOnly()) return;
       const key = btn.getAttribute('data-key');
       const idx = Number(btn.getAttribute('data-idx'));
       const ok = await confirmDelete('ลบรายการนี้?');
@@ -1310,6 +1521,7 @@ function bindContentEvents(){
 
   el.querySelectorAll('[data-action="add-master"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
+      if(isReadOnly()) return;
       state.masterProjects.push({villageNo:state.currentVillage, years:{}, status:'pending'});
       scheduleSaveMaster([state.currentVillage]);
       renderContent();
@@ -1317,6 +1529,7 @@ function bindContentEvents(){
   });
   el.querySelectorAll('[data-action="delete-master"]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      if(isReadOnly()) return;
       const idx = Number(btn.getAttribute('data-idx'));
       const ok = await confirmDelete('ลบโครงการนี้ออกจากแผน?');
       if(!ok) return;
@@ -1386,6 +1599,16 @@ document.getElementById('overlay').addEventListener('click', ()=>{
   document.getElementById('overlay').classList.remove('show');
 });
 
+document.getElementById('btnEnterEdit').addEventListener('click', promptEnterEditMode);
+document.getElementById('btnExitEdit').addEventListener('click', async ()=>{
+  const r = await Swal.fire({
+    icon:'question', title:'ออกจากโหมดแก้ไข?', text:'หน้าจอจะกลับไปเป็นโหมดดูอย่างเดียว',
+    showCancelButton:true, confirmButtonText:'ออกจากโหมดแก้ไข', cancelButtonText:'ยกเลิก',
+    confirmButtonColor:'#33414D'
+  });
+  if(r.isConfirmed) exitEditMode();
+});
+
 /* ============================================================
    LOAD / INIT — every fetch pulls the latest copy from the
    shared Google Sheet, since other people may have edited it.
@@ -1409,6 +1632,7 @@ async function ensureVillageLoaded(no, {force=false}={}){
     try{ state.villages[no] = Object.assign(blankVillageData(), JSON.parse(raw)); }catch(e){}
   }
   state.villages[no].__loaded = true;
+  villageVersions[no] = state.villages[no]._v || 0; // จำเวอร์ชันที่โหลดมา ไว้เทียบตอนบันทึกเพื่อกันเขียนทับคนอื่นแบบไม่รู้ตัว
   villageNameIndex[no] = getVillageName(no);
   refreshVillageNameOption(no);
 }
@@ -1418,8 +1642,16 @@ async function loadMasterProjects(){
     Array.from({length:28}, (_,i)=> Store.get('master-projects:'+(i+1)))
   );
   const all = [];
-  rawResults.forEach(raw=>{
-    if(raw){ try{ all.push(...JSON.parse(raw)); }catch(e){} }
+  rawResults.forEach((raw, i)=>{
+    const no = i+1;
+    if(!raw){ masterVersions[no] = 0; return; }
+    try{
+      const parsed = JSON.parse(raw);
+      // รองรับทั้งรูปแบบเก่า (array ตรงๆ) และรูปแบบใหม่ที่ห่อด้วย {items,_v,_savedBy,_savedAt}
+      const items = Array.isArray(parsed) ? parsed : (parsed.items || []);
+      all.push(...items);
+      masterVersions[no] = Array.isArray(parsed) ? 0 : (parsed._v || 0);
+    }catch(e){ masterVersions[no] = masterVersions[no] || 0; }
   });
   state.masterProjects = all;
 }
@@ -1449,6 +1681,7 @@ document.getElementById('btnRefresh').addEventListener('click', async ()=>{
 });
 
 async function init(){
+  applyAccessMode();
   const pill = document.getElementById('storagePillText');
   const pillWrap = document.getElementById('storagePill');
 
